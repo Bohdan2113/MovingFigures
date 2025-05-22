@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="styles.css" />
+
+    <title>Moving Figures</title>
+  </head>
+  <body>
+    <section id="work">
+      <div class="work-header">
+        <h1>Рух рівнобедренного трикутника</h1>
+      </div>
+      <div class="work-section">
+        <div id="for-canvas">
+          <canvas id="myCanvas"></canvas>
+        </div>
+        <div id="control-container">
+          <h2 class="panel-main-title">Панель керування</h2>
+
+          <div class="control-section">
+            <h3 class="control-section-title">Параметри трикутника</h3>
+            <div class="section-description">
+              Введіть координати <strong>першої (V<sub>1</sub>)</strong> та
+              <strong>другої (V<sub>2</sub>)</strong> вершин основи (X₁, Y₁),
+              (X₂, Y₂), а також довжину висоти (h).
+              <div class="info-trigger-container">
+                <span
+                  class="info-icon"
+                  tabindex="0"
+                  aria-label="Додаткова інформація про побудову трикутника"
+                  >Детальніше</span
+                >
+                <div class="info-tooltip">
+                  Третя вершина трикутника буде побудована від середини основи в
+                  напрямку, що визначається автоматично:
+                  <ul>
+                    <li>
+                      Якщо X₁ &lt X₂ (V<sub>1</sub> лівіше V<sub>2</sub>): третя
+                      вершина буде <strong>зверху</strong> (у напрямку більших
+                      значень Y на екрані).
+                    </li>
+                    <li>
+                      Якщо X₁ &gt X₂ (V<sub>1</sub> правіше V<sub>2</sub>):
+                      третя вершина буде <strong>знизу</strong> (у напрямку
+                      менших значень Y на екрані).
+                    </li>
+                    <li>
+                      Якщо X₁ = X₂ (основа вертикальна):
+                      <ul>
+                        <li>
+                          Якщо Y₁ &lt Y₂ (V<sub>1</sub> вище за V<sub>2</sub> на
+                          екрані): третя вершина буде <strong>зліва</strong> (у
+                          напрямку більших значень X).
+                        </li>
+                        <li>
+                          Якщо Y₁ &gt Y₂ (V<sub>1</sub> нижче за V<sub>2</sub>
+                          на екрані): третя вершина буде
+                          <strong>справа</strong> (у напрямку менших значень X).
+                        </li>
+                      </ul>
+                    </li>
+                  </ul>
+                  <em
+                    >Порада: щоб побудувати трикутник з іншого боку основи,
+                    просто поміняйте місцями координати V<sub>1</sub> та
+                    V<sub>2</sub>.</em
+                  >
+                </div>
+              </div>
+            </div>
+
+            <div class="input-row">
+              <div class="input-group">
+                <label for="v1x">Вершина основи 1 (X₁):</label>
+                <input
+                  type="number"
+                  id="v1x"
+                  name="v1x"
+                  class="text-edit"
+                  placeholder="напр. 10"
+                />
+                <span class="error-message" id="v1x-error"></span>
+              </div>
+              <div class="input-group">
+                <label for="v1y">Вершина основи 1 (Y₁):</label>
+                <input
+                  type="number"
+                  id="v1y"
+                  name="v1y"
+                  class="text-edit"
+                  placeholder="напр. 10"
+                />
+                <span class="error-message" id="v1y-error"></span>
+              </div>
+            </div>
+
+            <div class="input-row">
+              <div class="input-group">
+                <label for="v2x">Вершина основи 2 (X₂):</label>
+                <input
+                  type="number"
+                  id="v2x"
+                  name="v2x"
+                  class="text-edit"
+                  placeholder="напр. 50"
+                />
+                <span class="error-message" id="v2x-error"></span>
+              </div>
+              <div class="input-group">
+                <label for="v2y">Вершина основи 2 (Y₂):</label>
+                <input
+                  type="number"
+                  id="v2y"
+                  name="v2y"
+                  class="text-edit"
+                  placeholder="напр. 10"
+                />
+                <span class="error-message" id="v2y-error"></span>
+              </div>
+            </div>
+
+            <div class="input-group">
+              <label for="height_tri">Висота (h):</label>
+              <input
+                type="number"
+                id="height_tri"
+                name="height_tri"
+                class="text-edit"
+                placeholder="напр. 30"
+              />
+              <span class="error-message" id="height_tri-error"></span>
+            </div>
+            <span
+              class="error-message global-error"
+              id="triangle-config-error"
+            ></span>
+          </div>
+
+          <div class="control-section">
+            <h3 class="control-section-title">
+              Параметри прямої для відображення
+            </h3>
+            <p class="section-description">
+              Введіть коефіцієнти A, B, C для рівняння прямої<br />
+              Ax + By + C = 0.
+            </p>
+            <div class="input-row">
+              <div class="input-group">
+                <label for="lineA">Коефіцієнт A:</label>
+                <input
+                  type="number"
+                  id="lineA"
+                  name="lineA"
+                  class="text-edit"
+                  placeholder="A"
+                />
+                <span class="error-message" id="lineA-error"></span>
+              </div>
+              <div class="input-group">
+                <label for="lineB">Коефіцієнт B:</label>
+                <input
+                  type="number"
+                  id="lineB"
+                  name="lineB"
+                  class="text-edit"
+                  placeholder="B"
+                />
+                <span class="error-message" id="lineB-error"></span>
+              </div>
+              <div class="input-group">
+                <label for="lineC">Коефіцієнт C:</label>
+                <input
+                  type="number"
+                  id="lineC"
+                  name="lineC"
+                  class="text-edit"
+                  placeholder="C"
+                />
+                <span class="error-message" id="lineC-error"></span>
+              </div>
+            </div>
+            <span
+              class="error-message global-error"
+              id="line-config-error"
+            ></span>
+          </div>
+
+          <div class="control-section">
+            <h3 class="control-section-title">Збереження</h3>
+            <div class="button-group column-buttons">
+              <button id="saveMatrixBtn" class="control-button">
+                Зберегти матрицю перетворень
+              </button>
+              <button id="saveFigureBtn" class="control-button">
+                Зберегти початкову фігуру
+              </button>
+            </div>
+          </div>
+
+          <div class="control-section" id="animate-section">
+            <h3 class="control-section-title">Керування анімацією</h3>
+            <div class="button-group">
+              <button id="startResumeBtn" class="control-button primary-action">
+                Старт / Продовжити
+              </button>
+              <button id="stopBtn" class="control-button secondary-action">
+                Зупинити
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <script src="script.js"></script>
+  </body>
+</html>
