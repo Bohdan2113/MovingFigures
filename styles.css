@@ -236,7 +236,7 @@ button:hover {
 .input-group {
   display: flex;
   flex-direction: column;
-  margin-bottom: 12px;
+  margin-bottom: 0;
 }
 
 .input-group:last-child {
@@ -280,11 +280,9 @@ button:hover {
   display: block; /* Ensure it takes its own line and min-height works */
   line-height: 1.2;
 }
-/* Hide if empty, you can manage visibility with JS by adding/removing a class or content */
-/* .error-message:empty { */
-/* You might prefer to always reserve space with min-height */
-/* Or, if dynamically adding/removing: display: none; */
-/* } */
+.error-message:empty {
+  display: none;
+}
 
 .global-error {
   font-size: 0.8rem; /* 12.8px */
@@ -327,7 +325,7 @@ button:hover {
 }
 
 .control-button.primary-action {
-  background-color: #2ecc71;
+  background-color: #2ecc43;
   color: white;
 }
 .control-button.primary-action:hover {

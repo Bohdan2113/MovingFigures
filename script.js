@@ -4,8 +4,10 @@ class Point {
     this.y = y;
   }
 }
-
 class Coords {
+  static MIN_UNIT_COUNT = 1;
+  static MAX_UNIT_COUNT = 2000;
+
   constructor(_unitCount, _canvas) {
     this.unitCount = _unitCount;
     this.canvas = _canvas;
@@ -20,12 +22,12 @@ class Coords {
         let step = coordSystem.unitCount / 30;
         if (delta < 0)
           coordSystem.unitCount = Math.max(
-            minUnitCount,
+            Coords.MIN_UNIT_COUNT,
             coordSystem.unitCount - step
           );
         else
           coordSystem.unitCount = Math.min(
-            maxUnitCount,
+            Coords.MAX_UNIT_COUNT,
             coordSystem.unitCount + step
           );
 
@@ -37,7 +39,7 @@ class Coords {
 
   DrawCoords() {
     const GetSegmentLength = (uCount, uLength) => {
-      const factors = [2.5, 2, 2];
+      const factors = [2, 2.5, 2];
       let index = 0;
       let baseLover = 20;
       let baseUpper = 50;
@@ -77,7 +79,7 @@ class Coords {
         ctx.lineTo(endX, Y);
 
         if (isNumerate) {
-          const textX = endX + (numberShift);
+          const textX = endX + numberShift;
           const textY = Y;
           ctx.fillStyle = "#000000";
           ctx.textAlign = "left";
@@ -250,152 +252,342 @@ class Coords {
     };
   }
 }
+class Triangle {
+  constructor(v1, v2, h) {
+    this.v1 = v1;
+    this.v2 = v2;
+    this.h = h;
+  }
+
+  get baseMiddle() {
+    return new Point((this.v1.x + this.v2.x) / 2, (this.v1.y + this.v2.y) / 2);
+  }
+  get baseLen() {
+    return Math.sqrt(
+      Math.pow(this.v2.x - this.v1.x, 2) + Math.pow(this.v2.y - this.v1.y, 2)
+    );
+  }
+
+  get v3() {
+    // 1. Середина основи
+    const mid = this.baseMiddle;
+
+    // 2. Вектор основи
+    const dx = this.v2.x - this.v1.x;
+    const dy = this.v2.y - this.v1.y;
+
+    // 3. Довжина основи
+    const len = this.baseLen;
+
+    if (len === 0) throw new Error("Основа має нульову довжину");
+
+    // 4. Одиничний вектор, перпендикулярний основі (-dy, dx) (поворот на 90° проти год. стрілки)
+    const perpX = -dy / len;
+    const perpY = dx / len;
+
+    // 5. Точка на відстані h від середини в напрямку перпендикуляра
+    return new Point(mid.x + perpX * this.h, mid.y + perpY * this.h);
+  }
+}
+class Line {
+  constructor(a, b, c, canvas) {
+    this.A = a;
+    this.B = b;
+    this.C = c;
+    this.canvas = canvas;
+  }
+
+  get v1() {
+    let x1 = canvas.width / 2;
+    let y1 = 0;
+
+    if (this.B != 0) {
+      x1 = -Coords.MAX_UNIT_COUNT;
+      y1 = (-this.C - this.A * x1) / this.B;
+    }
+
+    return new Point(x1, y1);
+  }
+
+  get v2() {
+    let x2 = canvas.width / 2;
+    let y2 = canvas.height;
+
+    if (this.B != 0) {
+      x2 = Coords.MAX_UNIT_COUNT;
+      y2 = (-this.C - this.A * x2) / this.B;
+    }
+
+    return new Point(x2, y2);
+  }
+}
 
 const getEl = document.querySelector.bind(document);
 const canvas = getEl("#myCanvas");
-const startUnitCount = 30;
-const minUnitCount = 1;
-const maxUnitCount = 1000;
-const coordSystem = new Coords(30, canvas);
+const startUnitCount = 20;
+
+const coordSystem = new Coords(startUnitCount, canvas);
+let line = new Line(1, -1, 0);
+let triangle;
 
 window.onload = function () {
   canvas.height = window.innerHeight - 80;
   canvas.width = window.innerWidth - 450;
-  coordSystem.DrawCoords(startUnitCount, canvas);
+  Redraw(canvas);
+  SetBoundaries();
 
-  // getEl("#lineWidth").addEventListener("input", function () {
-  //   getEl("#lineWidthValue").innerText = this.value;
-  // });
-  // getEl("#angle").addEventListener("input", function () {
-  //   getEl("#angleValue").innerText = this.value;
-  // });
-
-  // // Отримуємо всі поля вводу
-  // const paramFields = Array.from(
-  //   getEl("#params-form").querySelectorAll("input")
-  // ).map((field) => ({
-  //   field: field,
-  //   errorId: `#error-message-getEl{field.getAttribute("id")}`,
-  // }));
-  // // Обробка введення (коректність і відображення змін)
-  // paramFields.forEach(({ field, errorId }) => {
-  //   field.addEventListener("input", (event) =>
-  //     hideErrorMessage(event, errorId)
-  //   );
-  //   field.addEventListener("input", (event) => {
-  //     checkInterval(event, errorId);
-  //     ChangeFractal();
-  //   });
-  // });
-  // getEl("#formula").addEventListener("input", (event) => {
-  //   ChangeFractal();
-  // });
-  // getEl("#fractal-name").addEventListener("input", (event) => {
-  //   workFractal.name = event.target.value;
-  // });
+  // Отримуємо всі поля вводу лише з двох форм
+  const forms = [
+    document.querySelector("#triangle-cofig-form"),
+    document.querySelector("#line-cofig-form"),
+  ];
+  const paramFields = forms
+    .flatMap((form) => Array.from(form.querySelectorAll("input")))
+    .map((field) => ({
+      field: field,
+      errorId: `#${field.getAttribute("id")}-error`, // правильне формування ID помилки
+    }));
+  // Обробка введення (перевірка й реакція)
+  paramFields.forEach(({ field, errorId }) => {
+    field.addEventListener("input", (event) => {
+      hideErrorMessage(event, errorId);
+      checkInterval(event, errorId);
+    });
+  });
+  const dynamicForms = [document.querySelector("#line-cofig-form")];
+  const dynamicParamFields = dynamicForms
+    .flatMap((form) => Array.from(form.querySelectorAll("input")))
+    .map((field) => ({
+      field: field,
+    }));
+  dynamicParamFields.forEach(({ field }) => {
+    field.addEventListener("input", (event) => {
+      UpdateLine();
+    });
+  });
 };
 
-// function FillFormValues(fractal) {
-//   ClearForm("#params-form");
+function SetBoundaries() {
+  const triangleForm = getEl("#triangle-cofig-form");
+  const lineForm = getEl("#line-cofig-form");
 
-//   getEl("#fractal-type").value = fractal.type;
-//   getEl("#fractal-name").value = fractal.name ? fractal.name : "noname";
+  const v1x = triangleForm["v1x"];
+  const v1y = triangleForm["v1y"];
+  const v2x = triangleForm["v2x"];
+  const v2y = triangleForm["v2y"];
+  const height_tri = triangleForm["height_tri"];
 
-//   getEl("#startX").value = fractal.x;
-//   getEl("#startY").value = fractal.y;
-//   getEl("#length").value = fractal.length;
-//   getEl("#iterations").value = fractal.iterations;
-//   getEl("#color").value = fractal.color;
-//   getEl("#angle").value = fractal.angle;
-//   getEl("#angleValue").innerText = fractal.angle;
-//   getEl("#lineWidth").value = fractal.lineW;
-//   getEl("#lineWidthValue").innerText = fractal.lineW;
-//   getEl("#realC").value = fractal.realC;
-//   getEl("#imagC").value = fractal.imagC;
-//   getEl("#bailout").value = fractal.bailout;
-//   getEl("#resolution").value = fractal.resolution;
+  const lineA = lineForm["lineA"];
+  const lineB = lineForm["lineB"];
+  const lineC = lineForm["lineC"];
 
-//   const select = getEl("#formula");
-//   select.value = fractal.formula;
-//   select.dispatchEvent(new Event("change"));
-// }
-// function ReadFormValues(fractal) {
-//   const fractalName = getEl("#fractal-name").value;
-//   fractal.name = fractalName;
+  v1x.min = -Coords.MAX_UNIT_COUNT / 2;
+  v1y.min = -Coords.MAX_UNIT_COUNT / 2;
+  v2x.min = -Coords.MAX_UNIT_COUNT / 2;
+  v2y.min = -Coords.MAX_UNIT_COUNT / 2;
+  height_tri.min = 0;
 
-//   fractal.x = parseFloat(getEl("#startX").value);
-//   fractal.y = parseFloat(getEl("#startY").value);
-//   fractal.length = parseFloat(getEl("#length").value);
-//   fractal.iterations = parseInt(getEl("#iterations").value);
-//   fractal.color = getEl("#color").value;
-//   fractal.angle = parseInt(getEl("#angle").value);
-//   fractal.lineW = parseInt(getEl("#lineWidth").value);
-//   fractal.realC = parseFloat(getEl("#realC").value);
-//   fractal.imagC = parseFloat(getEl("#imagC").value);
-//   fractal.bailout = parseFloat(getEl("#bailout").value);
-//   fractal.resolution = parseInt(getEl("#resolution").value);
-//   fractal.formula = parseInt(getEl("#formula").value);
-// }
+  v1x.max = Coords.MAX_UNIT_COUNT / 2;
+  v1y.max = Coords.MAX_UNIT_COUNT / 2;
+  v2x.max = Coords.MAX_UNIT_COUNT / 2;
+  v2y.max = Coords.MAX_UNIT_COUNT / 2;
+  height_tri.max = Coords.MAX_UNIT_COUNT / 2;
 
-// function ChangeFractal() {
-//   if (!ValidateForm("#params-form")) return;
-//   ReadFormValues(workFractal);
+  lineA.value = line.A;
+  lineB.value = line.B;
+  lineC.value = line.C;
+}
+function ValidateForm(form) {
+  if (!form) {
+    console.error(`Form with id "${form.getAttribute("id")}" is not found.`);
+    return false;
+  }
 
-//   Redraw(getEl("#myCanvas"), workFractal);
-// }
+  const paramFields = Array.from(form.querySelectorAll("input"));
+  let emptyFields = FilterEmptyFields(paramFields);
 
-// function SetBoundaries(form, type) {
-//   const iterationsField = form["iterations"];
-//   const lengthField = form["length"];
-//   const startXField = form["startX"];
-//   const startYField = form["startY"];
-//   const bailoutField = form["bailout"];
-//   const resolutionField = form["resolution"];
-//   const angleField = form["angle"];
-//   const widthField = form["width"];
+  if (emptyFields.length !== 0) {
+    console.log(emptyFields);
+    emptyFields.forEach((f) => {
+      f.style.borderColor = "red";
+      const message = `This field must be defined`;
+      showErrorMessage(message, `#${f.getAttribute("id")}-error`);
+    });
 
-//   if (type === "Algebraical") {
-//     iterationsField.min = 1;
-//     iterationsField.max = 700;
-//     getEl("#iterations_block").title = "Max iterations for each pixel";
-//     getEl("#color_block").title = "Determines the color scheme (shades)";
-//   } else if (type === "Minkovskogo") {
-//     iterationsField.min = 0;
-//     iterationsField.max = 6;
-//     getEl("#iterations_block").title = "Depth of fractal creation";
-//     getEl("#color_block").title = "Fractal color";
-//   }
+    return false;
+  }
 
-//   startXField.min = -maxUnitCount;
-//   startXField.max = maxUnitCount;
+  for (let i = 0; i < paramFields.length; i++) {
+    const value = parseFloat(paramFields[i].value);
+    const min = parseFloat(paramFields[i].min);
+    const max = parseFloat(paramFields[i].max);
 
-//   startYField.min = -maxUnitCount / 2 - 23;
-//   startYField.max = maxUnitCount / 2 + 23;
+    if (value > max || value < min) {
+      paramFields[i].style.borderColor = "red";
+      const message = `${value} is out of range [${min}, ${max}]`;
+      showErrorMessage(message, `#${paramFields[i].getAttribute("id")}-error`);
+      return false;
+    }
+  }
 
-//   lengthField.min = -maxUnitCount;
-//   lengthField.max = maxUnitCount;
+  return true;
 
-//   bailoutField.min = 0;
-//   bailoutField.max = 1000;
+  function FilterEmptyFields(fields) {
+    let emptyFields = [];
+    for (let i = 0; i < fields.length; i++)
+      if (!fields[i].value.trim()) emptyFields.push(fields[i]);
 
-//   resolutionField.min = 1;
-//   resolutionField.max = 10;
+    return emptyFields;
+  }
+}
+function checkInterval(event, errorId) {
+  const value = parseFloat(event.target.value);
+  const min = parseFloat(event.target.min);
+  const max = parseFloat(event.target.max);
 
-//   angleField.min = 0;
-//   angleField.max = 360;
+  if (value === "") return;
+  if (value < min || value > max) {
+    const fieldId_str = errorId.split("-")[0];
+    console.log(fieldId_str);
+    const f = getEl(`${fieldId_str}`);
+    showErrorMessage(`${value} is out of range [${min}, ${max}]`, errorId);
+    event.target.style.borderColor = "red";
+  }
+}
+function hideErrorMessage(event, errorId) {
+  let errorElement = getEl(errorId);
 
-//   widthField.min = 1;
-//   widthField.max = 10;
-// }
+  errorElement.textContent = "";
+  event.target.style.borderColor = "#bdc3c7";
+}
+function showErrorMessage(message, where) {
+  let errorElement = getEl(where);
+  errorElement.textContent = message;
+}
+
+function UpdateLine() {
+  const lineForm = getEl("#line-cofig-form");
+  const lineA = lineForm["lineA"];
+  const lineB = lineForm["lineB"];
+  const lineC = lineForm["lineC"];
+
+  line.A = parseFloat(lineA.value);
+  line.B = parseFloat(lineB.value);
+  line.C = parseFloat(lineC.value);
+
+  Redraw(canvas);
+}
+function ToCanvas(point) {
+  const box = coordSystem.GetCoordSystemProportions();
+
+  return new Point(
+    box.centerX + point.x * box.unitLength,
+    box.centerY - point.y * box.unitLength
+  );
+}
+function ClearCanvas(canvas) {
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+function Redraw(canvas) {
+  ClearCanvas(canvas);
+  coordSystem.DrawCoords();
+
+  DrawLine(canvas, line);
+  if (triangle) DrawTrinagle(canvas, triangle);
+}
+
+function DrawTrinagle(canvas, triangle) {
+  const ctx = canvas.getContext("2d");
+
+  const v1 = ToCanvas(triangle.v1);
+  const v2 = ToCanvas(triangle.v2);
+  const v3 = ToCanvas(triangle.v3);
+  const baseMiddle = ToCanvas(triangle.baseMiddle);
+
+  // triangle
+  ctx.beginPath();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "#056913";
+  ctx.moveTo(v1.x, v1.y);
+  ctx.lineTo(v2.x, v2.y);
+  ctx.lineTo(v3.x, v3.y);
+  ctx.lineTo(v1.x, v1.y);
+  ctx.stroke();
+  ctx.closePath();
+
+  // height
+  ctx.beginPath();
+  ctx.lineWidth = 0.5;
+  ctx.strokeStyle = "#000000";
+  ctx.moveTo(v3.x, v3.y);
+  ctx.lineTo(baseMiddle.x, baseMiddle.y);
+  ctx.stroke();
+  ctx.closePath();
+}
+function DrawLine(canvas, line) {
+  const ctx = canvas.getContext("2d");
+
+  const v1 = ToCanvas(line.v1);
+  const v2 = ToCanvas(line.v2);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.strokeStyle = "blue";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([30, 20]);
+  ctx.moveTo(v1.x, v1.y);
+  ctx.lineTo(v2.x, v2.y);
+  ctx.stroke();
+  ctx.closePath();
+  ctx.restore();
+}
+
+function MultiplyMatrixes(A, B) {
+  if (A.length === 0 || B.length === 0) {
+    throw new Error("Неможливо перемножити порожні матриці");
+  }
+  if (A[0].length !== B.length) {
+    throw new Error(
+      "Неможливо перемножити: невідповідність розмірностей матриць"
+    );
+  }
+
+  let resMatrix;
+
+  for (let i = 0; i < A.length; i++) {
+    for (let j = 0; B[0].length; j++) {
+      let sum = 0;
+      for (let k = 0; k < A[0].length; k++) {
+        sum += A[i][k] * B[k][j];
+      }
+      resMatrix[i][j] = sum;
+    }
+  }
+
+  return resMatrix;
+}
+
+function CreateTriangleBut() {
+  const triangleForm = getEl("#triangle-cofig-form");
+
+  if (!ValidateForm(triangleForm)) return;
+
+  const v1x = parseFloat(triangleForm["v1x"].value);
+  const v1y = parseFloat(triangleForm["v1y"].value);
+  const v2x = parseFloat(triangleForm["v2x"].value);
+  const v2y = parseFloat(triangleForm["v2y"].value);
+  const height = parseFloat(triangleForm["height_tri"].value);
+
+  triangle = new Triangle(new Point(v1x, v1y), new Point(v2x, v2y), height);
+
+  Redraw(getEl("#myCanvas"));
+}
 
 // function ClearWork() {
 //   ClearCanvas(getEl("#myCanvas"));
 //   // ClearForm("#params-form");
 // }
-function ClearCanvas(canvas) {
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-}
 // function ClearForm(formId_str) {
 //   const form = getEl(formId_str);
 //   form.reset();
@@ -411,90 +603,6 @@ function ClearCanvas(canvas) {
 //     });
 //   }
 // }
-
-// function ValidateForm(formId_str) {
-//   const form = getEl(formId_str);
-//   if (!form) {
-//     console.error(`Form with id "getEl{formId_str}" not found.`);
-//     return false;
-//   }
-
-//   const paramFields = Array.from(form.querySelectorAll("input"));
-//   let emptyFields = FilterEmptyFields(paramFields);
-
-//   if (emptyFields.length !== 0) {
-//     console.log(emptyFields);
-//     emptyFields.forEach((f) => {
-//       f.style.borderColor = "red";
-//       const message = `Define "getEl{f.getAttribute("name")}" field`;
-//       showErrorMessage(message, `#error-message-getEl{f.getAttribute("id")}`);
-//     });
-
-//     return false;
-//   }
-
-//   for (let i = 0; i < paramFields.length; i++) {
-//     const value = parseFloat(paramFields[i].value);
-//     const min = parseFloat(paramFields[i].min);
-//     const max = parseFloat(paramFields[i].max);
-
-//     if (value > max || value < min) {
-//       paramFields[i].style.borderColor = "red";
-//       const message = `getEl{paramFields[i].getAttribute(
-//         "name"
-//       )}=getEl{value} is out of range [getEl{min}, getEl{max}]`;
-//       showErrorMessage(
-//         message,
-//         `#error-message-getEl{paramFields[i].getAttribute("id")}`
-//       );
-//       return false;
-//     }
-//   }
-
-//   return true;
-
-//   function FilterEmptyFields(fields) {
-//     let emptyFields = [];
-//     for (let i = 0; i < fields.length; i++)
-//       if (!fields[i].value.trim()) emptyFields.push(fields[i]);
-
-//     return emptyFields;
-//   }
-// }
-// function checkInterval(event, errorId) {
-//   const value = parseFloat(event.target.value);
-//   const min = parseFloat(event.target.min);
-//   const max = parseFloat(event.target.max);
-
-//   if (value === "") return;
-//   if (value < min || value > max) {
-//     const fieldId_str = errorId.split("-").pop();
-//     console.log(fieldId_str);
-//     const f = document.getElementById(fieldId_str);
-//     showErrorMessage(
-//       `getEl{f.getAttribute("name")}=getEl{value} is out of range [getEl{min}, getEl{max}]`,
-//       errorId
-//     );
-//     event.target.style.borderColor = "red";
-//   }
-// }
-// function hideErrorMessage(event, errorId) {
-//   let errorElement = getEl(errorId);
-
-//   errorElement.style.display = "none";
-//   event.target.style.borderColor = "#6f6f6f";
-// }
-// function showErrorMessage(message, where) {
-//   let errorElement = getEl(where);
-//   errorElement.textContent = message;
-
-//   errorElement.style.display = "block"; // Показати повідомлення
-// }
-
-function Redraw(canvas) {
-  ClearCanvas(canvas);
-  coordSystem.DrawCoords();
-}
 
 // function DrawLine(canvas, uCount, pStart, pEnd, width = 1, color = "#000000") {
 //   const ctx = canvas.getContext("2d");
@@ -606,12 +714,4 @@ function Redraw(canvas) {
 //       return [null, null];
 //     }
 //   }
-// }
-// function ToCanvas(canvas, point, uCount) {
-//   const box = GetCoordSystemProportions();
-
-//   return new Point(
-//     box.centerX + point.x * box.unitLength,
-//     box.centerY - point.y * box.unitLength
-//   );
 // }
