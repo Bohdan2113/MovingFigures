@@ -355,3 +355,40 @@ button:hover {
 #control-container button:hover {
   transform: translateY(-0.5px); /* Optional: subtle lift effect */
 }
+
+#btn-create-triangle {
+  /* Або .control-section button, якщо не додаєте клас */
+  display: inline-block;
+  padding: 10px 20px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #fff;
+  background-color: #007bff; /* Класичний синій */
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+  transition: background-color 0.2s ease-in-out;
+  margin-top: 15px; /* Відступ зверху */
+}
+
+#btn-create-triangle:hover {
+  background-color: #0056b3; /* Темніший синій при наведенні */
+}
+
+#btn-create-triangle:active {
+  background-color: #004085; /* Ще темніший при натисканні */
+}
+
+#btn-create-triangle:focus {
+  outline: none;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.5); /* Підсвітка при фокусі */
+}
+
+.with-error::after {
+  content: " (error)";
+  color: #ff0000;
+  font-weight: bold;
+  margin-left: 8px;
+}

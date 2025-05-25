@@ -3,6 +3,12 @@ class Point {
     this.x = x;
     this.y = y;
   }
+
+  distanceTo(other) {
+    return Math.sqrt(
+      Math.pow(this.x - other.x, 2) + Math.pow(this.y - other.y, 2)
+    );
+  }
 }
 class Coords {
   static MIN_UNIT_COUNT = 1;
@@ -31,7 +37,7 @@ class Coords {
             coordSystem.unitCount + step
           );
 
-        Redraw(getEl("#myCanvas"));
+        Redraw(coordSystem);
       },
       { passive: false }
     );
@@ -41,8 +47,8 @@ class Coords {
     const GetSegmentLength = (uCount, uLength) => {
       const factors = [2, 2.5, 2];
       let index = 0;
-      let baseLover = 20;
-      let baseUpper = 50;
+      let baseLover = startUnitCount;
+      let baseUpper = Math.max(gridHuge, 0);
       let interval = 1;
 
       if (uCount < baseLover) {
@@ -145,7 +151,7 @@ class Coords {
       }
     };
 
-    const ctx = canvas.getContext("2d");
+    const ctx = this.canvas.getContext("2d");
     const fontSizeNumeration = 10;
     const fontSizeDirection = 18;
     let precision = 0;
@@ -257,6 +263,21 @@ class Triangle {
     this.v1 = v1;
     this.v2 = v2;
     this.h = h;
+
+    this.v3 = (() => {
+      const mid = this.baseMiddle;
+
+      const dx = this.v2.x - this.v1.x;
+      const dy = this.v2.y - this.v1.y;
+
+      const len = this.baseLen;
+      if (len === 0) throw new Error("Основа має нульову довжину");
+
+      const perpX = -dy / len;
+      const perpY = dx / len;
+
+      return new Point(mid.x + perpX * this.h, mid.y + perpY * this.h);
+    })();
   }
 
   get baseMiddle() {
@@ -268,25 +289,18 @@ class Triangle {
     );
   }
 
-  get v3() {
-    // 1. Середина основи
-    const mid = this.baseMiddle;
+  get farthestVertexFromOrigin() {
+    const origin = new Point(0, 0);
 
-    // 2. Вектор основи
-    const dx = this.v2.x - this.v1.x;
-    const dy = this.v2.y - this.v1.y;
+    const d1 = this.v1.distanceTo(origin);
+    const d2 = this.v2.distanceTo(origin);
+    const d3 = this.v3.distanceTo(origin);
 
-    // 3. Довжина основи
-    const len = this.baseLen;
+    const max = Math.max(d1, d2, d3);
 
-    if (len === 0) throw new Error("Основа має нульову довжину");
-
-    // 4. Одиничний вектор, перпендикулярний основі (-dy, dx) (поворот на 90° проти год. стрілки)
-    const perpX = -dy / len;
-    const perpY = dx / len;
-
-    // 5. Точка на відстані h від середини в напрямку перпендикуляра
-    return new Point(mid.x + perpX * this.h, mid.y + perpY * this.h);
+    if (max === d1) return this.v1;
+    if (max === d2) return this.v2;
+    return this.v3;
   }
 }
 class Line {
@@ -295,11 +309,20 @@ class Line {
     this.B = b;
     this.C = c;
     this.canvas = canvas;
+    this.shift = 0;
   }
 
   get v1() {
-    let x1 = canvas.width / 2;
-    let y1 = 0;
+    if (this.A === 0 && this.B === 0) {
+      if (this.C === 0) {
+        throw new Error("Рівняння задає всю площину, а не пряму.");
+      } else {
+        throw new Error("Недопустиме рівняння: не існує жодної прямої.");
+      }
+    }
+
+    let x1 = -this.C / this.A;
+    let y1 = -Coords.MAX_UNIT_COUNT;
 
     if (this.B != 0) {
       x1 = -Coords.MAX_UNIT_COUNT;
@@ -310,8 +333,16 @@ class Line {
   }
 
   get v2() {
-    let x2 = canvas.width / 2;
-    let y2 = canvas.height;
+    if (this.A === 0 && this.B === 0) {
+      if (this.C === 0) {
+        throw new Error("Рівняння задає всю площину, а не пряму.");
+      } else {
+        throw new Error("Недопустиме рівняння: не існує жодної прямої.");
+      }
+    }
+
+    let x2 = -this.C / this.A;
+    let y2 = +Coords.MAX_UNIT_COUNT;
 
     if (this.B != 0) {
       x2 = Coords.MAX_UNIT_COUNT;
@@ -324,16 +355,25 @@ class Line {
 
 const getEl = document.querySelector.bind(document);
 const canvas = getEl("#myCanvas");
+const EPS = 1e-10;
+
 const startUnitCount = 20;
+const gridHuge = 50;
+const animationTime_ms = 3000;
+const fps = 100;
 
 const coordSystem = new Coords(startUnitCount, canvas);
-let line = new Line(1, -1, 0);
+let line = new Line(-1, 1, 0);
+let sampleTriangle;
 let triangle;
+let isActivated = false;
+let isPaused = false;
+let isWaiting = true;
 
 window.onload = function () {
   canvas.height = window.innerHeight - 80;
   canvas.width = window.innerWidth - 450;
-  Redraw(canvas);
+  Redraw(coordSystem);
   SetBoundaries();
 
   // Отримуємо всі поля вводу лише з двох форм
@@ -380,6 +420,7 @@ function SetBoundaries() {
   const lineA = lineForm["lineA"];
   const lineB = lineForm["lineB"];
   const lineC = lineForm["lineC"];
+  const shift = lineForm["shift"];
 
   v1x.min = -Coords.MAX_UNIT_COUNT / 2;
   v1y.min = -Coords.MAX_UNIT_COUNT / 2;
@@ -396,6 +437,8 @@ function SetBoundaries() {
   lineA.value = line.A;
   lineB.value = line.B;
   lineC.value = line.C;
+  shift.min = 0;
+  shift.max = Coords.MAX_UNIT_COUNT / 2;
 }
 function ValidateForm(form) {
   if (!form) {
@@ -459,26 +502,49 @@ function hideErrorMessage(event, errorId) {
 
   errorElement.textContent = "";
   event.target.style.borderColor = "#bdc3c7";
+
+  const panelName = getEl(".panel-main-title");
+  panelName.classList.remove("with-error");
 }
 function showErrorMessage(message, where) {
   let errorElement = getEl(where);
   errorElement.textContent = message;
+
+  if (message.length > 0) {
+    const panelName = getEl(".panel-main-title");
+    panelName.classList.add("with-error");
+  }
 }
 
-function UpdateLine() {
+async function UpdateLine() {
   const lineForm = getEl("#line-cofig-form");
   const lineA = lineForm["lineA"];
   const lineB = lineForm["lineB"];
   const lineC = lineForm["lineC"];
+  const shift = lineForm["shift"];
 
+  if (
+    parseFloat(lineA.value) === parseFloat(lineB.value) &&
+    parseFloat(lineB.value) === 0
+  ) {
+    showErrorMessage("A and B can't both be zeros", "#line-config-error");
+    return;
+  } else showErrorMessage("", "#line-config-error");
+
+  isPaused = true;
+  while (!isWaiting) await sleep(10);
   line.A = parseFloat(lineA.value);
   line.B = parseFloat(lineB.value);
   line.C = parseFloat(lineC.value);
+  if (shift.value) {
+    line.shift = parseFloat(shift.value) * (line.shift < 0 ? -1 : 1);
+  }
+  isPaused = false;
 
-  Redraw(canvas);
+  Redraw(coordSystem);
 }
-function ToCanvas(point) {
-  const box = coordSystem.GetCoordSystemProportions();
+function ToCanvas(point, coords) {
+  const box = coords.GetCoordSystemProportions();
 
   return new Point(
     box.centerX + point.x * box.unitLength,
@@ -489,21 +555,21 @@ function ClearCanvas(canvas) {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
-function Redraw(canvas) {
-  ClearCanvas(canvas);
-  coordSystem.DrawCoords();
+function Redraw(coords) {
+  ClearCanvas(coords.canvas);
+  coords.DrawCoords();
 
-  DrawLine(canvas, line);
-  if (triangle) DrawTrinagle(canvas, triangle);
+  DrawLine(coords.canvas, line);
+  if (triangle) DrawTrinagle(coords, triangle);
 }
 
-function DrawTrinagle(canvas, triangle) {
-  const ctx = canvas.getContext("2d");
+function DrawTrinagle(coords, triangle) {
+  const ctx = coords.canvas.getContext("2d");
 
-  const v1 = ToCanvas(triangle.v1);
-  const v2 = ToCanvas(triangle.v2);
-  const v3 = ToCanvas(triangle.v3);
-  const baseMiddle = ToCanvas(triangle.baseMiddle);
+  const v1 = ToCanvas(triangle.v1, coords);
+  const v2 = ToCanvas(triangle.v2, coords);
+  const v3 = ToCanvas(triangle.v3, coords);
+  const baseMiddle = ToCanvas(triangle.baseMiddle, coords);
 
   // triangle
   ctx.beginPath();
@@ -528,10 +594,13 @@ function DrawTrinagle(canvas, triangle) {
 function DrawLine(canvas, line) {
   const ctx = canvas.getContext("2d");
 
-  const v1 = ToCanvas(line.v1);
-  const v2 = ToCanvas(line.v2);
+  const box = coordSystem.GetCoordSystemProportions();
+  let v1 = new Point(line.v1.x * box.unitLength, line.v1.y * box.unitLength);
+  let v2 = new Point(line.v2.x * box.unitLength, line.v2.y * box.unitLength);
 
   ctx.save();
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.scale(1, -1); // щоб Y ріс вгору
   ctx.beginPath();
   ctx.strokeStyle = "blue";
   ctx.lineWidth = 1;
@@ -543,32 +612,10 @@ function DrawLine(canvas, line) {
   ctx.restore();
 }
 
-function MultiplyMatrixes(A, B) {
-  if (A.length === 0 || B.length === 0) {
-    throw new Error("Неможливо перемножити порожні матриці");
-  }
-  if (A[0].length !== B.length) {
-    throw new Error(
-      "Неможливо перемножити: невідповідність розмірностей матриць"
-    );
-  }
-
-  let resMatrix;
-
-  for (let i = 0; i < A.length; i++) {
-    for (let j = 0; B[0].length; j++) {
-      let sum = 0;
-      for (let k = 0; k < A[0].length; k++) {
-        sum += A[i][k] * B[k][j];
-      }
-      resMatrix[i][j] = sum;
-    }
-  }
-
-  return resMatrix;
-}
-
 function CreateTriangleBut() {
+  isActivated = false;
+  isPaused = false;
+  isWaiting = true;
   const triangleForm = getEl("#triangle-cofig-form");
 
   if (!ValidateForm(triangleForm)) return;
@@ -579,139 +626,229 @@ function CreateTriangleBut() {
   const v2y = parseFloat(triangleForm["v2y"].value);
   const height = parseFloat(triangleForm["height_tri"].value);
 
-  triangle = new Triangle(new Point(v1x, v1y), new Point(v2x, v2y), height);
+  if (v1x === v2x && v1y === v2y) {
+    const message = `Точки основи не повинні збігатись`;
+    showErrorMessage(message, `#triangle-config-error`);
+  } else showErrorMessage("", `#triangle-config-error`);
 
-  Redraw(getEl("#myCanvas"));
+  triangle = new Triangle(new Point(v1x, v1y), new Point(v2x, v2y), height);
+  sampleTriangle = new Triangle(
+    new Point(v1x, v1y),
+    new Point(v2x, v2y),
+    height
+  );
+  line.shift = Math.abs(line.shift);
+
+  Redraw(coordSystem);
+}
+function SaveMatrixBut() {
+  const motionForm = getEl("#line-cofig-form");
+  if (!ValidateForm(motionForm)) {
+    alert("Введіть усі параметри руху коректно.");
+    return;
+  }
+
+  let A;
+  let coordsShiftX;
+  let coordsShiftY;
+  let coordsRotate;
+  let mirrorOX = scale(1, -1);
+  let figureShiftX = Math.abs(line.shift);
+
+  if (line.B !== 0) {
+    coordsShiftX = 0;
+    coordsShiftY = -line.C / line.B; // зсув по Y
+    coordsRotate = Math.atan2(-line.A, line.B) + (line.B < 0 ? Math.PI : 0);
+  } else {
+    coordsShiftX = -line.C / line.A; // зсув по X
+    coordsShiftY = 0;
+    coordsRotate = Math.PI / 2;
+  }
+
+  A = shift(-coordsShiftX, -coordsShiftY);
+  A = MultiplyMatrixes(A, rotate(-coordsRotate));
+  A = MultiplyMatrixes(A, mirrorOX);
+  A = MultiplyMatrixes(A, shift(figureShiftX, 0));
+  A = MultiplyMatrixes(A, rotate(coordsRotate));
+  A = MultiplyMatrixes(A, shift(coordsShiftX, coordsShiftY));
+
+  console.log(A);
+  downloadMatrix(A);
+}
+function SaveFigureBut() {
+  if (!triangle) {
+    alert("Спершу створіть фігуру.");
+    return;
+  }
+
+  // створюємо тимчасовий канвас
+  const tempCanvas = document.createElement("canvas");
+  tempCanvas.width = canvas.width;
+  tempCanvas.height = canvas.height;
+
+  const tempUnitCount = parseInt(
+    Math.max(
+      Math.abs(sampleTriangle.farthestVertexFromOrigin.x),
+      Math.abs(sampleTriangle.farthestVertexFromOrigin.y)
+    ) * 2
+  );
+  const temCoords = new Coords(tempUnitCount, tempCanvas);
+  temCoords.DrawCoords();
+  DrawTrinagle(temCoords, sampleTriangle);
+
+  const link = document.createElement("a");
+  link.download = "sampleFigure.png";
+  link.href = tempCanvas.toDataURL("image/png");
+  link.click(); // Trigger the download
+}
+async function StartMotion() {
+  if (isPaused) isPaused = false;
+  if (isActivated) return;
+  else isActivated = true;
+
+  const motionForm = getEl("#line-cofig-form");
+  if (!triangle) return;
+  if (!ValidateForm(motionForm)) return;
+
+  let A;
+  let coordsShiftX;
+  let coordsShiftY;
+  let coordsRotate;
+  let tempTriangle = new Triangle(
+    new Point(sampleTriangle.v1.x, sampleTriangle.v1.y),
+    new Point(sampleTriangle.v2.x, sampleTriangle.v2.y),
+    sampleTriangle.h
+  );
+
+  let delta = 1 / ((animationTime_ms / 1000) * fps);
+  for (let i = delta; ; i += delta) {
+    if (i > 1) i = 1;
+    while (isPaused) {
+      isWaiting = true;
+      await sleep(100);
+    }
+    if (!isActivated) break;
+    isWaiting = false;
+
+    let triangleMatrix = [
+      [tempTriangle.v1.x, tempTriangle.v1.y, 1],
+      [tempTriangle.v2.x, tempTriangle.v2.y, 1],
+      [tempTriangle.v3.x, tempTriangle.v3.y, 1],
+    ];
+    let mirrorOX = scale(1, 1 - 2 * i);
+    let figureShiftX = line.shift * i;
+
+    if (line.B !== 0) {
+      coordsShiftX = 0;
+      coordsShiftY = -line.C / line.B; // зсув по Y
+      coordsRotate = Math.atan2(-line.A, line.B) + (line.B < 0 ? Math.PI : 0);
+    } else {
+      coordsShiftX = -line.C / line.A; // зсув по X
+      coordsShiftY = 0;
+      coordsRotate = Math.PI / 2;
+    }
+
+    A = shift(-coordsShiftX, -coordsShiftY);
+    A = MultiplyMatrixes(A, rotate(-coordsRotate));
+    A = MultiplyMatrixes(A, mirrorOX);
+    A = MultiplyMatrixes(A, shift(figureShiftX, 0));
+    A = MultiplyMatrixes(A, rotate(coordsRotate));
+    A = MultiplyMatrixes(A, shift(coordsShiftX, coordsShiftY));
+    triangleMatrix = MultiplyMatrixes(triangleMatrix, A);
+
+    triangle.v1.x = triangleMatrix[0][0];
+    triangle.v1.y = triangleMatrix[0][1];
+    triangle.v2.x = triangleMatrix[1][0];
+    triangle.v2.y = triangleMatrix[1][1];
+    triangle.v3.x = triangleMatrix[2][0];
+    triangle.v3.y = triangleMatrix[2][1];
+
+    Redraw(coordSystem);
+    await sleep(animationTime_ms * Math.abs(delta));
+
+    if (i === 1) {
+      console.log(A);
+      i = delta;
+      line.shift = -line.shift;
+
+      tempTriangle.v1.x = triangle.v1.x;
+      tempTriangle.v1.y = triangle.v1.y;
+      tempTriangle.v2.x = triangle.v2.x;
+      tempTriangle.v2.y = triangle.v2.y;
+      tempTriangle.v3.x = triangle.v3.x;
+      tempTriangle.v3.y = triangle.v3.y;
+    }
+  }
+}
+function StopMotion() {
+  isPaused = true;
 }
 
-// function ClearWork() {
-//   ClearCanvas(getEl("#myCanvas"));
-//   // ClearForm("#params-form");
-// }
-// function ClearForm(formId_str) {
-//   const form = getEl(formId_str);
-//   form.reset();
-//   if (form) {
-//     const paragraphs = form.querySelectorAll("p");
-//     paragraphs.forEach((p) => {
-//       p.style.display = "none";
-//     });
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+function downloadMatrix(matrix, filename = "matrix.txt") {
+  let text = "Матриця афінного перетворення (3x3):\n\n";
 
-//     const inputs = form.querySelectorAll("input");
-//     inputs.forEach((input) => {
-//       input.style.borderColor = "#6f6f6f";
-//     });
-//   }
-// }
+  for (let row of matrix) {
+    text += row.map(n => n.toExponential(4).padStart(15)).join(" ") + "\n";
+  }
 
-// function DrawLine(canvas, uCount, pStart, pEnd, width = 1, color = "#000000") {
-//   const ctx = canvas.getContext("2d");
+  const blob = new Blob([text], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
 
-//   const pStartCanvas = ToCanvas(canvas, pStart, uCount);
-//   const pEndCanvas = ToCanvas(canvas, pEnd, uCount);
-//   const box = GetCoordSystemProportions(canvas, uCount);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.style.display = "none";
 
-//   ctx.strokeStyle = color;
-//   ctx.lineWidth = width;
-//   drawClippedLine(ctx, box, pStartCanvas, pEndCanvas);
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 
-//   function isPointInBox(p, box) {
-//     return (
-//       p.x >= box.left && p.x <= box.right && p.y >= box.top && p.y <= box.bottom
-//     );
-//   }
-//   function drawClippedLine(ctx, box, pStartCanvas, pEndCanvas) {
-//     const insideStart = isPointInBox(pStartCanvas, box);
-//     const insideEnd = isPointInBox(pEndCanvas, box);
+  URL.revokeObjectURL(url);
+}
 
-//     // обидві точки за межами — нічого не малюємо
-//     if (!insideStart && !insideEnd) return;
+const scale = (a, d) => [
+  [a, 0, 0],
+  [0, d, 0],
+  [0, 0, 1],
+];
+const shift = (x, y) => [
+  [1, 0, 0],
+  [0, 1, 0],
+  [x, y, 1],
+];
+const rotate = (fi) => [
+  [Math.cos(fi), Math.sin(fi), 0],
+  [-Math.sin(fi), Math.cos(fi), 0],
+  [0, 0, 1],
+];
+function MultiplyMatrixes(A, B) {
+  if (A.length === 0 || B.length === 0) {
+    throw new Error("Неможливо перемножити порожні матриці");
+  }
+  if (A[0].length !== B.length) {
+    throw new Error(
+      "Неможливо перемножити: невідповідність розмірностей матриць"
+    );
+  }
 
-//     // Якщо одна з точок за межами — обрізаємо лінію
-//     let clippedStart = pStartCanvas;
-//     let clippedEnd = pEndCanvas;
-//     if (!insideStart || !insideEnd) {
-//       [clippedStart, clippedEnd] = clipLineToBox(pStartCanvas, pEndCanvas, box);
-//       if (!clippedStart || !clippedEnd) return;
-//     }
+  let resMatrix = [
+    [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0],
+  ];
 
-//     // Малюємо лінію
-//     ctx.beginPath();
-//     ctx.moveTo(pStartCanvas.x, pStartCanvas.y);
-//     ctx.lineTo(pEndCanvas.x, pEndCanvas.y);
-//     ctx.stroke();
-//   }
-//   function clipLineToBox(p1, p2, box) {
-//     let x1 = p1.x,
-//       y1 = p1.y;
-//     let x2 = p2.x,
-//       y2 = p2.y;
+  for (let i = 0; i < A.length; i++) {
+    for (let j = 0; j < B[0].length; j++) {
+      let sum = 0;
+      for (let k = 0; k < A[0].length; k++) {
+        sum += A[i][k] * B[k][j];
+      }
+      resMatrix[i][j] = sum;
+    }
+  }
 
-//     const INSIDE = 0,
-//       LEFT = 1,
-//       RIGHT = 2,
-//       BOTTOM = 4,
-//       TOP = 8;
-
-//     function computeOutCode(x, y) {
-//       let code = INSIDE;
-//       if (x < box.left) code |= LEFT;
-//       else if (x > box.right) code |= RIGHT;
-//       if (y < box.top) code |= TOP;
-//       else if (y > box.bottom) code |= BOTTOM;
-//       return code;
-//     }
-
-//     let outcode1 = computeOutCode(x1, y1);
-//     let outcode2 = computeOutCode(x2, y2);
-//     let accept = false;
-
-//     while (true) {
-//       if (!(outcode1 | outcode2)) {
-//         // Обидві точки всередині
-//         accept = true;
-//         break;
-//       } else if (outcode1 & outcode2) {
-//         // Обидві точки по одну сторону — повністю поза
-//         break;
-//       } else {
-//         // Є часткове перетинання — обрізаємо
-//         let outcodeOut = outcode1 ? outcode1 : outcode2;
-//         let x, y;
-
-//         if (outcodeOut & TOP) {
-//           x = x1 + ((x2 - x1) * (box.top - y1)) / (y2 - y1);
-//           y = box.top;
-//         } else if (outcodeOut & BOTTOM) {
-//           x = x1 + ((x2 - x1) * (box.bottom - y1)) / (y2 - y1);
-//           y = box.bottom;
-//         } else if (outcodeOut & RIGHT) {
-//           y = y1 + ((y2 - y1) * (box.right - x1)) / (x2 - x1);
-//           x = box.right;
-//         } else if (outcodeOut & LEFT) {
-//           y = y1 + ((y2 - y1) * (box.left - x1)) / (x2 - x1);
-//           x = box.left;
-//         }
-
-//         if (outcodeOut === outcode1) {
-//           x1 = x;
-//           y1 = y;
-//           outcode1 = computeOutCode(x1, y1);
-//         } else {
-//           x2 = x;
-//           y2 = y;
-//           outcode2 = computeOutCode(x2, y2);
-//         }
-//       }
-//     }
-
-//     if (accept) {
-//       return [
-//         { x: x1, y: y1 },
-//         { x: x2, y: y2 },
-//       ];
-//     } else {
-//       return [null, null];
-//     }
-//   }
-// }
+  return resMatrix;
+}

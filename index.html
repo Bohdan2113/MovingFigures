@@ -137,17 +137,24 @@
                 id="triangle-config-error"
               ></span>
             </form>
-            
-            <button onclick="CreateTriangleBut()">Create triangle</button>
+
+            <button
+              id="btn-create-triangle"
+              class="control-button"
+              onclick="CreateTriangleBut()"
+            >
+              Create triangle
+            </button>
           </div>
 
           <div class="control-section">
             <h3 class="control-section-title">
-              Параметри прямої для відображення
+              Параметри руху
             </h3>
             <p class="section-description">
               Введіть коефіцієнти A, B, C для рівняння прямої<br />
               Ax + By + C = 0.
+              та ширину зсуву (в додатньому напрямку) по цій прямій
             </p>
 
             <form id="line-cofig-form">
@@ -186,6 +193,17 @@
                   <span class="error-message" id="lineC-error"></span>
                 </div>
               </div>
+              <div class="input-group">
+                <label for="shift">Ширина зсуву:</label>
+                <input
+                  type="number"
+                  id="shift"
+                  name="shift"
+                  class="text-edit"
+                  placeholder="напр. 30"
+                />
+                <span class="error-message" id="shift-error"></span>
+              </div>
               <span
                 class="error-message global-error"
                 id="line-config-error"
@@ -196,10 +214,18 @@
           <div class="control-section">
             <h3 class="control-section-title">Збереження</h3>
             <div class="button-group column-buttons">
-              <button id="saveMatrixBtn" class="control-button">
+              <button
+                id="saveMatrixBtn"
+                class="control-button"
+                onclick="SaveMatrixBut()"
+              >
                 Зберегти матрицю перетворень
               </button>
-              <button id="saveFigureBtn" class="control-button">
+              <button
+                id="saveFigureBtn"
+                class="control-button"
+                onclick="SaveFigureBut()"
+              >
                 Зберегти початкову фігуру
               </button>
             </div>
@@ -208,10 +234,10 @@
           <div class="control-section" id="animate-section">
             <h3 class="control-section-title">Керування анімацією</h3>
             <div class="button-group">
-              <button id="startResumeBtn" class="control-button primary-action">
+              <button id="startResumeBtn" class="control-button primary-action" onclick="StartMotion()">
                 Старт / Продовжити
               </button>
-              <button id="stopBtn" class="control-button secondary-action">
+              <button id="stopBtn" class="control-button secondary-action" onclick="StopMotion()">
                 Зупинити
               </button>
             </div>
