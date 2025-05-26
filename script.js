@@ -754,6 +754,7 @@ async function StartMotion() {
     A = MultiplyMatrixes(A, shift(figureShiftX, 0));
     A = MultiplyMatrixes(A, rotate(coordsRotate));
     A = MultiplyMatrixes(A, shift(coordsShiftX, coordsShiftY));
+
     triangleMatrix = MultiplyMatrixes(triangleMatrix, A);
 
     triangle.v1.x = triangleMatrix[0][0];
@@ -767,7 +768,6 @@ async function StartMotion() {
     await sleep(animationTime_ms * Math.abs(delta));
 
     if (i === 1) {
-      console.log(A);
       i = delta;
       line.shift = -line.shift;
 
@@ -791,7 +791,7 @@ function downloadMatrix(matrix, filename = "matrix.txt") {
   let text = "Матриця афінного перетворення (3x3):\n\n";
 
   for (let row of matrix) {
-    text += row.map(n => n.toExponential(4).padStart(15)).join(" ") + "\n";
+    text += row.map((n) => n.toExponential(4).padStart(15)).join(" ") + "\n";
   }
 
   const blob = new Blob([text], { type: "text/plain" });
