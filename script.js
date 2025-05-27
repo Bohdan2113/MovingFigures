@@ -356,10 +356,9 @@ class Line {
 const getEl = document.querySelector.bind(document);
 const canvas = getEl("#myCanvas");
 const EPS = 1e-10;
-
 const startUnitCount = 20;
 const gridHuge = 50;
-const animationTime_ms = 3000;
+const animationTime_ms = 2000;
 const fps = 100;
 
 const coordSystem = new Coords(startUnitCount, canvas);
@@ -371,8 +370,8 @@ let isPaused = false;
 let isWaiting = true;
 
 window.onload = function () {
-  canvas.height = window.innerHeight - 80;
-  canvas.width = window.innerWidth - 450;
+  canvas.width = 1086;
+  canvas.height = 615;
   Redraw(coordSystem);
   SetBoundaries();
 
@@ -720,9 +719,9 @@ async function StartMotion() {
     sampleTriangle.h
   );
 
+  let stopCondition = 1;
   let delta = 1 / ((animationTime_ms / 1000) * fps);
   for (let i = delta; ; i += delta) {
-    if (i > 1) i = 1;
     while (isPaused) {
       isWaiting = true;
       await sleep(100);
@@ -730,14 +729,16 @@ async function StartMotion() {
     if (!isActivated) break;
     isWaiting = false;
 
+    // Початкова фігура
     let triangleMatrix = [
       [tempTriangle.v1.x, tempTriangle.v1.y, 1],
       [tempTriangle.v2.x, tempTriangle.v2.y, 1],
       [tempTriangle.v3.x, tempTriangle.v3.y, 1],
     ];
-    let mirrorOX = scale(1, 1 - 2 * i);
-    let figureShiftX = line.shift * i;
 
+    // Знаходження змінних
+    let figureShiftX = line.shift * i;
+    let figureScaleY = 1 - 2 * i; // відображення по OX
     if (line.B !== 0) {
       coordsShiftX = 0;
       coordsShiftY = -line.C / line.B; // зсув по Y
@@ -748,13 +749,21 @@ async function StartMotion() {
       coordsRotate = Math.PI / 2;
     }
 
-    A = shift(-coordsShiftX, -coordsShiftY);
-    A = MultiplyMatrixes(A, rotate(-coordsRotate));
-    A = MultiplyMatrixes(A, mirrorOX);
-    A = MultiplyMatrixes(A, shift(figureShiftX, 0));
-    A = MultiplyMatrixes(A, rotate(coordsRotate));
-    A = MultiplyMatrixes(A, shift(coordsShiftX, coordsShiftY));
+    // Матриці перетворення фігури
+    let mirrorOX = scale(1, 1 - 2 * i);
+    let shiftFigure = shift(figureShiftX, 0);
+    // Обчислення матриць перетворенння системи координат
+    let rotateCoords = rotate(-coordsRotate);
+    let shiftCoords = shift(-coordsShiftX, -coordsShiftY);
 
+    // Знаходження матриці афінного перетворення
+    A = shiftCoords;
+    A = MultiplyMatrixes(A, rotateCoords);
+    A = MultiplyMatrixes(A, mirrorOX);
+    A = MultiplyMatrixes(A, shiftFigure);
+    A = MultiplyMatrixes(A, inverseMatrixSmart(rotateCoords));
+    A = MultiplyMatrixes(A, inverseMatrixSmart(shiftCoords));
+    // Застосування матриці до фігури
     triangleMatrix = MultiplyMatrixes(triangleMatrix, A);
 
     triangle.v1.x = triangleMatrix[0][0];
@@ -767,16 +776,9 @@ async function StartMotion() {
     Redraw(coordSystem);
     await sleep(animationTime_ms * Math.abs(delta));
 
-    if (i === 1) {
-      i = delta;
-      line.shift = -line.shift;
-
-      tempTriangle.v1.x = triangle.v1.x;
-      tempTriangle.v1.y = triangle.v1.y;
-      tempTriangle.v2.x = triangle.v2.x;
-      tempTriangle.v2.y = triangle.v2.y;
-      tempTriangle.v3.x = triangle.v3.x;
-      tempTriangle.v3.y = triangle.v3.y;
+    if (Math.abs(i - stopCondition) < EPS) {
+      stopCondition = 1 - stopCondition;
+      delta = -delta;
     }
   }
 }
@@ -853,7 +855,7 @@ function MultiplyMatrixes(A, B) {
 
   return resMatrix;
 }
-function isOrthogonal(matrix, tolerance = 1e-10) {
+function isOrthogonal(matrix, tolerance = EPS) {
   const n = matrix.length;
   const transpose = transposeMatrix(matrix);
   const product = MultiplyMatrixes(matrix, transpose);
@@ -870,7 +872,7 @@ function isOrthogonal(matrix, tolerance = 1e-10) {
   return true;
 }
 function transposeMatrix(matrix) {
-  return matrix[0].map((_, i) => matrix.map(row => row[i]));
+  return matrix[0].map((_, i) => matrix.map((row) => row[i]));
 }
 function inverseMatrix(matrix) {
   const n = matrix.length;
@@ -915,7 +917,7 @@ function inverseMatrix(matrix) {
   }
 
   // Вилучаємо обернену матрицю (права частина)
-  const inverse = augmented.map(row => row.slice(n));
+  const inverse = augmented.map((row) => row.slice(n));
   return inverse;
 }
 function inverseMatrixSmart(matrix) {
@@ -923,26 +925,7 @@ function inverseMatrixSmart(matrix) {
     console.log("Матриця ортогональна — обернена = транспонована");
     return transposeMatrix(matrix);
   } else {
+    console.log("Матриця не ортогональна");
     return inverseMatrix(matrix); // з попереднього прикладу
   }
 }
-
-// // Приклад використання:
-// const matrix = [
-//   [4, 7],
-//   [2, 6]
-// ];
-// const inverse = inverseMatrix(matrix);
-// console.log("Обернена матриця 1:");
-// console.table(inverse);
-
-// const Q = [
-//   [1 / Math.sqrt(2), -1 / Math.sqrt(2)],
-//   [1 / Math.sqrt(2),  1 / Math.sqrt(2)]
-// ];
-// const inv = inverseMatrixSmart(Q);
-// console.log("Обернена матриця 2:");
-// console.table(inv);
-// const inv2 = inverseMatrix(Q);
-// console.log("Обернена матриця 3:");
-// console.table(inv);
