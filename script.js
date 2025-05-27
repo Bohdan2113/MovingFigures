@@ -824,6 +824,7 @@ const rotate = (fi) => [
   [-Math.sin(fi), Math.cos(fi), 0],
   [0, 0, 1],
 ];
+
 function MultiplyMatrixes(A, B) {
   if (A.length === 0 || B.length === 0) {
     throw new Error("Неможливо перемножити порожні матриці");
@@ -852,3 +853,96 @@ function MultiplyMatrixes(A, B) {
 
   return resMatrix;
 }
+function isOrthogonal(matrix, tolerance = 1e-10) {
+  const n = matrix.length;
+  const transpose = transposeMatrix(matrix);
+  const product = MultiplyMatrixes(matrix, transpose);
+
+  // Перевірка чи добуток дорівнює одиничній матриці
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const expected = i === j ? 1 : 0;
+      if (Math.abs(product[i][j] - expected) > tolerance) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+function transposeMatrix(matrix) {
+  return matrix[0].map((_, i) => matrix.map(row => row[i]));
+}
+function inverseMatrix(matrix) {
+  const n = matrix.length;
+
+  // Створюємо розширену матрицю [A | I]
+  const augmented = matrix.map((row, i) =>
+    row.concat(Array.from({ length: n }, (_, j) => (i === j ? 1 : 0)))
+  );
+
+  for (let i = 0; i < n; i++) {
+    // Знаходимо головний елемент
+    let maxRow = i;
+    for (let k = i + 1; k < n; k++) {
+      if (Math.abs(augmented[k][i]) > Math.abs(augmented[maxRow][i])) {
+        maxRow = k;
+      }
+    }
+
+    // Обмін рядків
+    [augmented[i], augmented[maxRow]] = [augmented[maxRow], augmented[i]];
+
+    // Перевірка на нульовий визначник
+    if (augmented[i][i] === 0) {
+      throw new Error("Матриця не має оберненої (сингулярна матриця)");
+    }
+
+    // Нормалізація головного рядка
+    const divisor = augmented[i][i];
+    for (let j = 0; j < 2 * n; j++) {
+      augmented[i][j] /= divisor;
+    }
+
+    // Занулення інших елементів у стовпці
+    for (let k = 0; k < n; k++) {
+      if (k !== i) {
+        const factor = augmented[k][i];
+        for (let j = 0; j < 2 * n; j++) {
+          augmented[k][j] -= factor * augmented[i][j];
+        }
+      }
+    }
+  }
+
+  // Вилучаємо обернену матрицю (права частина)
+  const inverse = augmented.map(row => row.slice(n));
+  return inverse;
+}
+function inverseMatrixSmart(matrix) {
+  if (isOrthogonal(matrix)) {
+    console.log("Матриця ортогональна — обернена = транспонована");
+    return transposeMatrix(matrix);
+  } else {
+    return inverseMatrix(matrix); // з попереднього прикладу
+  }
+}
+
+// // Приклад використання:
+// const matrix = [
+//   [4, 7],
+//   [2, 6]
+// ];
+// const inverse = inverseMatrix(matrix);
+// console.log("Обернена матриця 1:");
+// console.table(inverse);
+
+// const Q = [
+//   [1 / Math.sqrt(2), -1 / Math.sqrt(2)],
+//   [1 / Math.sqrt(2),  1 / Math.sqrt(2)]
+// ];
+// const inv = inverseMatrixSmart(Q);
+// console.log("Обернена матриця 2:");
+// console.table(inv);
+// const inv2 = inverseMatrix(Q);
+// console.log("Обернена матриця 3:");
+// console.table(inv);
