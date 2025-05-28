@@ -304,12 +304,14 @@ class Triangle {
   }
 }
 class Line {
-  constructor(a, b, c, canvas) {
+  constructor(a, b, c, shift, animateTime, fps, canvas) {
     this.A = a;
     this.B = b;
     this.C = c;
     this.canvas = canvas;
-    this.shift = 0;
+    this.shift = shift;
+    this.animateTime = animateTime;
+    this.fps = fps;
   }
 
   get v1() {
@@ -358,16 +360,22 @@ const canvas = getEl("#myCanvas");
 const EPS = 1e-10;
 const startUnitCount = 20;
 const gridHuge = 50;
-const animationTime_ms = 2000;
-const fps = 100;
+const animationTime_s = 2;
+const FPS = 29.97;
 
 const coordSystem = new Coords(startUnitCount, canvas);
-let line = new Line(-1, 1, 0);
+let line = new Line(-1, 1, 0, 0, animationTime_s, FPS, canvas);
 let sampleTriangle;
 let triangle;
 let isActivated = false;
 let isPaused = false;
 let isWaiting = true;
+
+const isSublim = true;
+const subliminalMax = 25;
+let subliminal = 0;
+
+const isConsoleOutput = false;
 
 window.onload = function () {
   canvas.width = 1086;
@@ -420,6 +428,8 @@ function SetBoundaries() {
   const lineB = lineForm["lineB"];
   const lineC = lineForm["lineC"];
   const shift = lineForm["shift"];
+  const time = lineForm["time"];
+  const fps = lineForm["fps"];
 
   v1x.min = -Coords.MAX_UNIT_COUNT / 2;
   v1y.min = -Coords.MAX_UNIT_COUNT / 2;
@@ -436,8 +446,17 @@ function SetBoundaries() {
   lineA.value = line.A;
   lineB.value = line.B;
   lineC.value = line.C;
+
+  shift.value = line.shift;
   shift.min = 0;
   shift.max = Coords.MAX_UNIT_COUNT / 2;
+
+  time.value = line.animateTime;
+  time.min = 0;
+
+  fps.value = line.fps;
+  fps.min = 1;
+  fps.max = 100;
 }
 function ValidateForm(form) {
   if (!form) {
@@ -521,6 +540,8 @@ async function UpdateLine() {
   const lineB = lineForm["lineB"];
   const lineC = lineForm["lineC"];
   const shift = lineForm["shift"];
+  const time = lineForm["time"];
+  const fps = lineForm["fps"];
 
   if (
     parseFloat(lineA.value) === parseFloat(lineB.value) &&
@@ -532,12 +553,13 @@ async function UpdateLine() {
 
   isPaused = true;
   while (!isWaiting) await sleep(10);
-  line.A = parseFloat(lineA.value);
-  line.B = parseFloat(lineB.value);
-  line.C = parseFloat(lineC.value);
-  if (shift.value) {
-    line.shift = parseFloat(shift.value) * (line.shift < 0 ? -1 : 1);
-  }
+  if (lineA.value) line.A = parseFloat(lineA.value);
+  if (lineB.value) line.B = parseFloat(lineB.value);
+  if (lineC.value) line.C = parseFloat(lineC.value);
+  if (shift.value) line.shift = parseFloat(shift.value);
+  if (time.value) line.animateTime = parseFloat(time.value);
+  if (fps.value) line.fps = parseFloat(fps.value);
+
   isPaused = false;
 
   Redraw(coordSystem);
@@ -720,8 +742,14 @@ async function StartMotion() {
   );
 
   let stopCondition = 1;
-  let delta = 1 / ((animationTime_ms / 1000) * fps);
-  for (let i = delta; ; i += delta) {
+  let direction = 1; // 1 - додатній напрямок | -1 - від'ємний
+  let delta = (1 / (line.animateTime * line.fps)) * 1;
+  let deltaR = (1 / (line.animateTime * line.fps)) * direction;
+  for (let i = delta, r = delta; ; i += delta, r += deltaR) {
+    if (line.shift * i > Coords.MAX_UNIT_COUNT) i = -i;
+    if (r < 0) r = 0;
+    if (r > 1) r = 1;
+
     while (isPaused) {
       isWaiting = true;
       await sleep(100);
@@ -738,7 +766,8 @@ async function StartMotion() {
 
     // Знаходження змінних
     let figureShiftX = line.shift * i;
-    let figureScaleY = 1 - 2 * i; // відображення по OX
+
+    let figureScaleY = 1 - 2 * r; // відображення по OX
     if (line.B !== 0) {
       coordsShiftX = 0;
       coordsShiftY = -line.C / line.B; // зсув по Y
@@ -750,7 +779,7 @@ async function StartMotion() {
     }
 
     // Матриці перетворення фігури
-    let mirrorOX = scale(1, 1 - 2 * i);
+    let mirrorOX = scale(1, figureScaleY);
     let shiftFigure = shift(figureShiftX, 0);
     // Обчислення матриць перетворенння системи координат
     let rotateCoords = rotate(-coordsRotate);
@@ -773,13 +802,21 @@ async function StartMotion() {
     triangle.v3.x = triangleMatrix[2][0];
     triangle.v3.y = triangleMatrix[2][1];
 
-    Redraw(coordSystem);
-    await sleep(animationTime_ms * Math.abs(delta));
+    if (isSublim && subliminal === subliminalMax) {
+      subliminal = 1;
+      drawScaledText(coordSystem.canvas, "Привіт від Богдана!");
+      await sleep(1000 / FPS);
+    } else subliminal++;
 
-    if (Math.abs(i - stopCondition) < EPS) {
+    Redraw(coordSystem);
+    await sleep(line.animateTime * 1000 * Math.abs(delta));
+
+    if (r === stopCondition) {
       stopCondition = 1 - stopCondition;
-      delta = -delta;
+      direction = -direction;
     }
+    delta = (1 / (line.animateTime * line.fps)) * 1; // Оновлення часу та плавності анімаці
+    deltaR = (1 / (line.animateTime * line.fps)) * direction; // Оновлення часу та плавності анімаці
   }
 }
 function StopMotion() {
@@ -809,6 +846,30 @@ function downloadMatrix(matrix, filename = "matrix.txt") {
   document.body.removeChild(a);
 
   URL.revokeObjectURL(url);
+}
+function drawScaledText(canvas, text) {
+  const ctx = canvas.getContext("2d");
+
+  let fontSize = 50;
+  const maxWidth = canvas.width * 0.4;
+  const maxHeight = canvas.height * 0.4;
+
+  // // Знаходимо максимальний розмір шрифту
+  // while (true) {
+  //   ctx.font = `${fontSize}px sans-serif`;
+  //   const metrics = ctx.measureText(text);
+  //   const textHeight = fontSize; // орієнтовно
+  //   if (metrics.width > maxWidth || textHeight > maxHeight) break;
+  //   fontSize++;
+  // }
+
+  fontSize--; // останній допустимий розмір
+  ctx.font = `${fontSize}px sans-serif`;
+  ctx.fillStyle = "black";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  ctx.fillText(text, canvas.width / 2, canvas.height / 3);
 }
 
 const scale = (a, d) => [
@@ -922,10 +983,11 @@ function inverseMatrix(matrix) {
 }
 function inverseMatrixSmart(matrix) {
   if (isOrthogonal(matrix)) {
-    console.log("Матриця ортогональна — обернена = транспонована");
+    if (isConsoleOutput)
+      console.log("Матриця ортогональна — обернена = транспонована");
     return transposeMatrix(matrix);
   } else {
-    console.log("Матриця не ортогональна");
+    if (isConsoleOutput) console.log("Матриця не ортогональна");
     return inverseMatrix(matrix); // з попереднього прикладу
   }
 }

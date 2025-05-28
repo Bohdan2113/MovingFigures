@@ -225,22 +225,16 @@ button:hover {
 .input-row {
   display: flex;
   gap: 15px;
-  margin-bottom: 10px;
 }
 
 .input-row .input-group {
   flex: 1;
-  margin-bottom: 0;
 }
 
 .input-group {
   display: flex;
   flex-direction: column;
-  margin-bottom: 0;
-}
-
-.input-group:last-child {
-  margin-bottom: 5px;
+  margin-bottom: 10px;
 }
 
 .input-group label {
